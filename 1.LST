@@ -1,0 +1,713 @@
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE 1
+OBJECT MODULE PLACED IN 1.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE 1.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include <STC8.h>
+   2          #include "delay.h"
+   3          #include "intrins.h"
+   4          typedef unsigned char BYTE;
+   5          typedef unsigned int WORD;
+   6          #define FOSC        11059200UL
+   7          #define BRT         (65536 - FOSC / 9600 / 4)
+   8          #define uint unsigned int 
+   9          #define uchar unsigned char
+  10          #define u8 unsigned char
+  11          #define u16 unsigned int
+  12          #define u32 unsigned long
+  13          #define DataPort P2 //定义数据端口 程序中遇到DataPort 则用P0 替换
+  14          uchar code q[]={0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f,0x77,0x7c,0x39,0x5e,0x79,0x71,0x76,0x00,
+             -0x40,0xff};
+  15          uchar q2[]={0x00,0x00,0x00,0x00};
+  16          sbit led1=P0^0;
+  17          sbit led2=P0^1;
+  18          sbit led3=P0^2;
+  19          sbit led4=P0^3;
+  20          
+  21          sbit enout=P1^1;
+  22          sbit enin=P3^5;
+  23          
+  24          sbit k1=P3^4;
+  25          
+  26          sbit s1=P3^2;
+  27          sbit s2=P3^3;
+  28          
+  29          sbit l1=P1^6;
+  30          sbit l2=P1^7;
+  31          
+  32          sbit in2=P1^5;
+  33          
+  34          uchar q1[20];
+  35          uchar x,xi,x1,x2,bt1,bt2;
+  36          uint miao,miao1;
+  37          
+  38          uchar a_a,wd1,sw3,id=0,ks=0;
+  39          
+  40          uint num1,sw1,sw2,sw4;
+  41          
+  42          bit busy;
+  43          char wptr;
+  44          char rptr;
+  45          char buffer[16];
+  46          void IapIdle()
+  47          {
+  48   1          IAP_CONTR = 0;                              //关闭IAP功能
+  49   1          IAP_CMD = 0;                                //清除命令寄存器
+  50   1          IAP_TRIG = 0;                               //清除触发寄存器
+  51   1          IAP_ADDRH = 0x80;                           //将地址设置到非IAP区域
+  52   1          IAP_ADDRL = 0;
+  53   1      }
+  54          
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 2   
+
+  55          char IapRead(int addr)
+  56          {
+  57   1          char dat;
+  58   1      
+  59   1          IAP_CONTR = 0x80;                           //使能IAP
+  60   1          IAP_TPS = 40;                               //设置等待参数12MHz
+  61   1          IAP_CMD = 1;                                //设置IAP读命令
+  62   1          IAP_ADDRL = addr;                           //设置IAP低地址
+  63   1          IAP_ADDRH = addr >> 8;                      //设置IAP高地址
+  64   1          IAP_TRIG = 0x5a;                            //写触发命令(0x5a)
+  65   1          IAP_TRIG = 0xa5;                            //写触发命令(0xa5)
+  66   1          _nop_();
+  67   1          dat = IAP_DATA;                             //读IAP数据
+  68   1          IapIdle();                                  //关闭IAP功能
+  69   1      
+  70   1          return dat;
+  71   1      }
+  72          
+  73          void IapProgram(int addr, char dat)
+  74          {
+  75   1          IAP_CONTR = 0x80;                           //使能IAP
+  76   1          IAP_TPS = 40;                               //设置等待参数12MHz
+  77   1          IAP_CMD = 2;                                //设置IAP写命令
+  78   1          IAP_ADDRL = addr;                           //设置IAP低地址
+  79   1          IAP_ADDRH = addr >> 8;                      //设置IAP高地址
+  80   1          IAP_DATA = dat;                             //写IAP数据
+  81   1          IAP_TRIG = 0x5a;                            //写触发命令(0x5a)
+  82   1          IAP_TRIG = 0xa5;                            //写触发命令(0xa5)
+  83   1          _nop_();
+  84   1          IapIdle();                                  //关闭IAP功能
+  85   1      }
+  86          
+  87          void IapErase(int addr)
+  88          {
+  89   1          IAP_CONTR = 0x80;                           //使能IAP
+  90   1          IAP_TPS = 40;                               //设置等待参数12MHz
+  91   1          IAP_CMD = 3;                                //设置IAP擦除命令
+  92   1          IAP_ADDRL = addr;                           //设置IAP低地址
+  93   1          IAP_ADDRH = addr >> 8;                      //设置IAP高地址
+  94   1          IAP_TRIG = 0x5a;                            //写触发命令(0x5a)
+  95   1          IAP_TRIG = 0xa5;                            //写触发命令(0xa5)
+  96   1          _nop_();                                    //
+  97   1          IapIdle();                                  //关闭IAP功能
+  98   1      }
+  99          
+ 100          //
+ 101          void write_eeprom()
+ 102          {         
+ 103   1          IapErase(0x0400);  //扇区擦除
+ 104   1          IapProgram(0x0400 + 1,id);
+ 105   1          IapProgram(0x0400 + 2,num1/256);IapProgram(0x0400 + 3,num1%256);
+ 106   1          
+ 107   1          IapProgram(0x0400 + 4,sw1/256);IapProgram(0x0400 + 5,sw1%256);  
+ 108   1          
+ 109   1          IapProgram(0x0400 + 6,sw2/256);IapProgram(0x0400 + 7,sw2%256);
+ 110   1          
+ 111   1          IapProgram(0x0400 + 8,sw3);
+ 112   1        
+ 113   1          IapProgram(0x0400 + 9,wd1);
+ 114   1        
+ 115   1          IapProgram(0x0400 + 10,sw4/256);IapProgram(0x0400 + 11,sw4%256);
+ 116   1        
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 3   
+
+ 117   1          IapProgram(0x0400 + 13,ks);
+ 118   1        
+ 119   1          IapProgram(0x0400 + 60,a_a);
+ 120   1        
+ 121   1      }
+ 122          /******************把数据从单片机内部eeprom中读出来*****************/
+ 123          void read_eeprom()                                  
+ 124          { uchar t,t1;
+ 125   1        id = IapRead(0x0400 + 1);
+ 126   1      
+ 127   1        
+ 128   1        t = IapRead(0x0400 + 2);t1=IapRead(0x0400 + 3);num1=t*256+t1;
+ 129   1        t = IapRead(0x0400 + 4);t1=IapRead(0x0400 + 5);sw1=t*256+t1;
+ 130   1        
+ 131   1        t = IapRead(0x0400 + 6);t1=IapRead(0x0400 + 7);sw2=t*256+t1;
+ 132   1        
+ 133   1        sw3 = IapRead(0x0400 + 8);
+ 134   1        wd1 = IapRead(0x0400 + 9);
+ 135   1        
+ 136   1        
+ 137   1        t = IapRead(0x0400 + 10);t1=IapRead(0x0400 + 11);sw4=t*256+t1;
+ 138   1        
+ 139   1        ks = IapRead(0x0400 + 13);
+ 140   1        
+ 141   1        a_a = IapRead(0x0400 + 60);
+ 142   1      }
+ 143          /**************开机自检eeprom初始化*****************/
+ 144          void init_eeprom() 
+ 145          {
+ 146   1          read_eeprom();
+ 147   1        if(a_a != 6)    //新的单片机初始单片机内问eeprom
+ 148   1        { id=1;
+ 149   2          a_a = 6;
+ 150   2          num1=1000;
+ 151   2          sw1=10000;   //1a
+ 152   2          sw2=300;    //5v
+ 153   2          sw3=10;
+ 154   2          wd1=40;
+ 155   2          sw4=000;
+ 156   2          write_eeprom();    //保存数据
+ 157   2        } 
+ 158   1      }
+ 159          void UartInit()//11.0592 9600
+ 160          {
+ 161   1        SCON = 0x50;    //8位数据,可变波特率
+ 162   1        AUXR |= 0x40;   //定时器时钟1T模式
+ 163   1        AUXR &= 0xFE;   //串口1选择定时器1为波特率发生器
+ 164   1        TMOD &= 0x0F;   //设置定时器模式
+ 165   1        TL1 = 0xE0;   //设置定时初始值
+ 166   1        TH1 = 0xFE;   //设置定时初始值
+ 167   1        ET1 = 0;    //禁止定时器%d中断
+ 168   1        TR1 = 1;    //定时器1开始计时
+ 169   1        ES   = 1;                                                                            
+ 170   1        EA   = 1; 
+ 171   1       P_SW1 = 0x00;                               //RXD/P3.0, TXD/P3.1
+ 172   1      //  P_SW1 = 0x40;                               //RXD_2/P3.6, TXD_2/P3.7
+ 173   1      //  P_SW1 = 0x80;                               //RXD_3/P1.6, TXD_3/P1.7  
+ 174   1      //  PS=1;
+ 175   1      }
+ 176          
+ 177          void UartSendByte(u8 dat)
+ 178          {
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 4   
+
+ 179   1        SBUF = dat;
+ 180   1        while(TI == 0);
+ 181   1        TI = 0;
+ 182   1      }
+ 183          
+ 184          void UartSendStr(u8 *str)
+ 185          {
+ 186   1        while(*str)
+ 187   1        {
+ 188   2          UartSendByte(*str);
+ 189   2          str++;
+ 190   2        }
+ 191   1      }
+ 192          void Uart2Init()
+ 193          {
+ 194   1          S2CON = 0x10;
+ 195   1          T2L = BRT;
+ 196   1          T2H = BRT >> 8;
+ 197   1          AUXR |= 0x14;
+ 198   1           IE2 = 0x01;
+ 199   1           EA = 1;
+ 200   1      }
+ 201          
+ 202          void Uart2Send(char dat)
+ 203          {
+ 204   1          while (busy);
+ 205   1          busy = 1;
+ 206   1          S2BUF = dat;
+ 207   1      }
+ 208          
+ 209          void Uart2SendStr(char *p)
+ 210          {
+ 211   1          while (*p)
+ 212   1          {
+ 213   2              Uart2Send(*p++);
+ 214   2          }
+ 215   1      }
+ 216          
+ 217          void Timer0Init(void)   //2毫秒@11.0592MHz
+ 218          {
+ 219   1          AUXR |= 0x80;   //定时器时钟1T模式
+ 220   1        TMOD &= 0xF0;   //设置定时器模式
+ 221   1        TL0 = 0x9a;   //设置定时初值
+ 222   1        TH0 = 0xa9;   //设置定时初值
+ 223   1        TF0 = 0;    //清除TF0标志
+ 224   1        TR0 = 1;    //定时器0开始计时
+ 225   1        TR0 = 1;                        //定时器0开始计时
+ 226   1          ET0 = 1;                        //使能定时器0中断
+ 227   1          PT0 = 1;
+ 228   1        EA = 1;
+ 229   1      //    IT0 = 1;                                    //??INT0?????
+ 230   1      //    EX0 = 1;                                    //??INT0??
+ 231   1      //    EA = 1;
+ 232   1      //  
+ 233   1      //  IT1 = 1;                                    //??INT1?????
+ 234   1      //    EX1 = 1;                                    //??INT1??
+ 235   1      //    EA = 1;
+ 236   1      }
+ 237          uchar i;
+ 238          bit btx1,btx2,btx4;
+ 239          uint ad1,ad2,ad4;
+ 240          float ad3;
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 5   
+
+ 241          void main()
+ 242           {  
+ 243   1      //A电流高位 A 01
+ 244   1      //B电流小数点   B.001
+ 245   1      //C电源版本 C 00
+ 246   1      //D电压限制 D12.1
+ 247   1      //E温度设定E 20
+ 248   1      //F0~1电流设置 F.001
+ 249   1      //h   地址设定 h 00  
+ 250   1          P0M0 = 0x00;
+ 251   1          P0M1 = 0x00;
+ 252   1          P1M0 = 0x0f;                                //??P1.0?ADC?
+ 253   1          P1M1 = 0x00;
+ 254   1          P2M0 = 0xff;
+ 255   1          P2M1 = 0x00;
+ 256   1          P3M0 = 0x00;
+ 257   1          P3M1 = 0x00;
+ 258   1          P4M0 = 0x00;
+ 259   1          P4M1 = 0x00;
+ 260   1          P5M0 = 0x00;
+ 261   1          P5M1 = 0x00;
+ 262   1         enout=0;
+ 263   1         enin=0;
+ 264   1         init_eeprom();
+ 265   1         UartInit();
+ 266   1         Uart2Init();
+ 267   1         Timer0Init();
+ 268   1         
+ 269   1      //   if(sw1==0){while(sw2==1);while(sw2==0);if(num7<9)num7=num7+1; write_eeprom();}
+ 270   1      //         if(sw2==0){while(sw1==1);while(sw1==0);if(num7>1)num7=num7-1; write_eeprom();}
+ 271   1         
+ 272   1        DelayMs(50);if(in2==1){btx2=1;ks=0;}
+ 273   1        
+ 274   1        while(1)
+ 275   1        {//pwm=1;
+ 276   2      //  enout=1;  
+ 277   2      //  Uart2SendStr("asdasdasd");
+ 278   2               if(s1==0){miao1=0;btx4=1;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2);if(num1<1000)num1=num
+             -1+1;ks=1;btx2=1; DelayMs(1);}
+ 279   2               if(s2==0){miao1=0;btx4=1;while(s1==1&&miao1<2);miao1=0;while(s1==0&&miao1<2);if(num1>0)num1=num1-
+             -1;ks=1;btx2=1; DelayMs(1); }
+ 280   2                
+ 281   2                if(ks==1){ 
+ 282   3               if(num1>=1000){q2[0]=q[num1/1000];}else q2[0]=0x00;
+ 283   3               if(num1>=100){q2[1]=q[num1%1000/100];}else q2[1]=0x00;
+ 284   3               if(num1>=10){q2[2]=q[num1%100/10];}else q2[2]=0x00;
+ 285   3                           q2[3]=q[num1%10];}
+ 286   2                           
+ 287   2                  else 
+ 288   2                  {
+ 289   3               q2[0]=0x00;
+ 290   3               q2[1]=q[0];
+ 291   3                    q2[2]=q[15];
+ 292   3                    q2[3]=q[15];
+ 293   3      
+ 294   3                  }             
+ 295   2              // UartSendByte('E');
+ 296   2               if(btx2==1){enout=1;ad3=4.095/sw3;
+ 297   3                                   (uint)ad1=(float)sw1*ad3;(uint)ad4=(float)sw4*ad3;ad3=(float)(ad1-ad4)/1000;if(num
+             -1==0){ad1=0;}else {(uint)ad1=(float)num1*ad3+ad4+255;};
+ 298   3                                   ad2=sw2*6.825;
+ 299   3                                   if(ad1>4095)ad1=4095;if(ad2>4095)ad2=4095;  
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 6   
+
+ 300   3                                   btx2=0;UartSendByte('A');UartSendByte('B');UartSendByte(ad2/1000+0x30);
+ 301   3                                                                        UartSendByte(ad2%1000/100+0x30);
+ 302   3                                                                        UartSendByte(ad2%100/10+0x30);
+ 303   3                                                                        UartSendByte(ad2%10+0x30);
+ 304   3                                                                        UartSendByte('E');
+ 305   3                                                                        UartSendByte(ad1/1000+0x30);
+ 306   3                                                                        UartSendByte(ad1%1000/100+0x30);
+ 307   3                                                                        UartSendByte(ad1%100/10+0x30);
+ 308   3                                                                        UartSendByte(ad1%10+0x30);
+ 309   3                                                                        UartSendByte('C');
+ 310   3                                                                        UartSendByte((4095-ad1)/1000+0x30);
+ 311   3                                                                        UartSendByte((4095-ad1)%1000/100+0x30);
+ 312   3                                                                        UartSendByte((4095-ad1)%100/10+0x30);
+ 313   3                                                                        UartSendByte((4095-ad1)%10+0x30);
+ 314   3                                                                        UartSendByte('V');
+ 315   3                                                                        UartSendByte((4095-ad2)/1000+0x30);
+ 316   3                                                                        UartSendByte((4095-ad2)%1000/100+0x30);
+ 317   3                                                                        UartSendByte((4095-ad2)%100/10+0x30);
+ 318   3                                                                        UartSendByte((4095-ad2)%10+0x30);
+ 319   3                                                                        UartSendByte('B');
+ 320   3                                                                        if(ks==1){UartSendByte('1');}else UartSendByte('0');
+ 321   3                                                                        if(ks==1){UartSendByte('0');}else UartSendByte('1');
+ 322   3                                                                        
+ 323   3                                                                        UartSendByte('#');
+ 324   3                                                                          DelayMs(10);
+ 325   3                               UartSendByte('A');UartSendByte('B');UartSendByte(ad2/1000+0x30);
+ 326   3                                                                        UartSendByte(ad2%1000/100+0x30);
+ 327   3                                                                        UartSendByte(ad2%100/10+0x30);
+ 328   3                                                                        UartSendByte(ad2%10+0x30);
+ 329   3                                                                        UartSendByte('E');
+ 330   3                                                                        UartSendByte(ad1/1000+0x30);
+ 331   3                                                                        UartSendByte(ad1%1000/100+0x30);
+ 332   3                                                                        UartSendByte(ad1%100/10+0x30);
+ 333   3                                                                        UartSendByte(ad1%10+0x30);
+ 334   3                                                                        UartSendByte('C');
+ 335   3                                                                        UartSendByte((4095-ad1)/1000+0x30);
+ 336   3                                                                        UartSendByte((4095-ad1)%1000/100+0x30);
+ 337   3                                                                        UartSendByte((4095-ad1)%100/10+0x30);
+ 338   3                                                                        UartSendByte((4095-ad1)%10+0x30);
+ 339   3                                                                        UartSendByte('V');
+ 340   3                                                                        UartSendByte((4095-ad2)/1000+0x30);
+ 341   3                                                                        UartSendByte((4095-ad2)%1000/100+0x30);
+ 342   3                                                                        UartSendByte((4095-ad2)%100/10+0x30);
+ 343   3                                                                        UartSendByte((4095-ad2)%10+0x30);
+ 344   3                                                                        UartSendByte('B');
+ 345   3                                                                        if(ks==1){UartSendByte('1');}else UartSendByte('0');
+ 346   3                                                                        if(ks==1){UartSendByte('0');}else UartSendByte('1');
+ 347   3                                                                        
+ 348   3                                                                        UartSendByte('#');
+ 349   3                                     
+ 350   3                                                         Uart2Send('A');Uart2Send(num1/1000+0x30);
+ 351   3                                                                        Uart2Send(num1%1000/100+0x30);
+ 352   3                                                                        Uart2Send(num1%100/10+0x30);
+ 353   3                                                                        Uart2Send(num1%10+0x30);
+ 354   3                                                                        Uart2Send('#');
+ 355   3                                     DelayMs(1);
+ 356   3                            enout=0;
+ 357   3                         }          
+ 358   2      if(in2==0){                     
+ 359   3      if(k1==0){l1=0;btx4=1;EX0=EX1=0;miao1=0;while(k1==0){l1=miao1%2;if(miao1>=5)
+ 360   5                                                    {i=0;q2[0]=q[10];q2[1]=0x00;q2[2]=q[sw1/10000];q2[3]=q[sw1%10
+             -000/1000];x2=254;l1=0;
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 7   
+
+ 361   6                                                     while(k1==0){if(btx1==0) P2M0 = 0xff;else  P2M0 = 0x00;} DelayMs(10);miao1=0;
+ 362   6                                                     while(1)
+ 363   6                                                     {
+ 364   7                                                      if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2);if(i<6)i=i+1
+             -; DelayMs(1);}
+ 365   7                                                      if(s2==0){miao1=0;while(s1==1&&miao1<2);miao1=0;while(s1==
+             -0&&miao1<2);if(i>0)i=i-1; DelayMs(1); } 
+ 366   7                                                       switch(i)
+ 367   7                                                             {case 0:  q2[0]=q[10];     q2[1]=0x00;q2[2]=q[sw1/1
+             -0000];q2[3]=q[sw1%10000/1000];break;  
+ 368   8                                                              case 1:  q2[0]=q[11]|0x80;q2[1]=q[sw1%1000/100];q2
+             -[2]=q[sw1%100/10];q2[3]=q[sw1%10];break;  
+ 369   8                                                              case 2:  q2[0]=q[12];     q2[1]=0x00;q2[2]=q[sw3/10];q2[3]=q[sw3%10];break;  
+ 370   8                                                              case 3:  q2[0]=q[13];     q2[1]=q[sw2/100];q2[2]=q[sw2%100/10]|0x80;q2[3]=q[sw
+             -2%10];break;  
+ 371   8                                                              case 4:  q2[0]=q[14];     q2[1]=0x00;q2[2]=q[wd1/10000];q2[3]=q[wd1%10000/1000
+             -];break;  
+ 372   8                                                              case 5:  q2[0]=q[15]|0x80;q2[1]=q[sw4/100];q2[2]=q[sw4%100/10];q2[3]=q[sw4%10]
+             -;break;  
+ 373   8                                                              case 6:  q2[0]=q[16];     q2[1]=q[id/100];q2[2]=q[id%100/10];q2[3]=q[id%10];br
+             -eak;                                                           
+ 374   8                                                             }
+ 375   7                                                                 if(k1==0){DelayUs2x(100);if(k1==0){x2=60;while(
+             -k1==0){if(btx1==0) P2M0 = 0xff;else  P2M0 = 0x00;}  DelayMs(10);miao1=0;
+ 376   9                                                                  while(1){ 
+ 377  10                                                                  switch(i)
+ 378  10                                                                     {case 0:  q2[0]=q[10];     q2[1]=0x00;q2[2]=q[sw1/10000];q2[3]=q[sw1%10000
+             -/1000];
+ 379  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2);if(
+             -sw1<(sw3*1000))sw1=sw1+1000; DelayMs(1);}
+ 380  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(sw1>1000)sw1=sw1-1000; DelayMs(1); }  break;  
+ 381  11                                                                      
+ 382  11                                                                      case 1:  q2[0]=q[11]|0x80;q2[1]=q[sw1%1000/100];q2[2]=q[sw1%100/10];q2[3]=
+             -q[sw1%10];
+ 383  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(sw1<(sw3*1000))sw1=sw1+2; DelayMs(1);}
+ 384  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(sw1>=2)sw1=sw1-2; DelayMs(1); } break;  
+ 385  11                                                                      
+ 386  11                                                                      case 2:  q2[0]=q[12];     q2[1]=0x00;q2[2]=q[sw3/10];q2[3]=q[sw3%10];
+ 387  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(sw3<25)sw3=sw3+1; DelayMs(1);}
+ 388  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(sw3>2)sw3=sw3-1; DelayMs(1); }  break;  
+ 389  11                                                                      
+ 390  11                                                                      case 3:  q2[0]=q[13];     q2[1]=q[sw2/100];q2[2]=q[sw2%100/10]|0x80
+             -;q2[3]=q[sw2%10];
+ 391  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(sw2<600)sw2=sw2+1; DelayMs(1);}
+ 392  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(sw2>10)sw2=sw2-1; DelayMs(1); } break;  
+ 393  11                                                                      
+ 394  11                                                                      case 4:  q2[0]=q[14];     q2[1]=0x00;q2[2]=q[wd1/10000];q2[3]=q[wd1
+             -%10000/1000];
+ 395  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(wd1<90)wd1=wd1+1; DelayMs(1);}
+ 396  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(wd1>1)wd1=wd1-1; DelayMs(1); }  break;  
+ 397  11                                                                
+ 398  11                                                                      case 5:  q2[0]=q[15]|0x80;q2[1]=q[sw4/100];q2[2]=q[sw4%100/10];q2[3
+             -]=q[sw4%10];
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 8   
+
+ 399  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(sw4<999)sw4=sw4+1; DelayMs(1);}
+ 400  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(sw4>0)sw4=sw4-1; DelayMs(1); }  break;  
+ 401  11      
+ 402  11                                                                      case 6:  q2[0]=q[16];     q2[1]=q[id/100];q2[2]=q[id%100/10];q2[3]=
+             -q[id%10];              
+ 403  11                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1
+             -<2);if(id<250)id=id+1; DelayMs(1);}
+ 404  11                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(id>0)id=id-1; DelayMs(1); } break;                                                           
+ 405  11                                                                     }
+ 406  10                                                                    if(k1==0){DelayUs2x(100);if(k1==0){x2=254;wh
+             -ile(k1==0){if(btx1==0) P2M0 = 0xff;else  P2M0 = 0x00;}  DelayMs(10);miao1=0;break;}}
+ 407  10                                                                    if(btx1==0) P2M0 = 0xff;else  P2M0 = 0x00;
+ 408  10                                                                         } 
+ 409   9                                                                  
+ 410   9                                                                 }}                                                      
+ 411   7                                                      if(miao1>5){btx2=1;break;}   
+ 412   7                                                      if(btx1==0) P2M0 = 0xff;else  P2M0 = 0x00;
+ 413   7                                                     }
+ 414   6                                                    }
+ 415   5                                                     
+ 416   5                                              
+ 417   5                                                   }    
+ 418   4                                                if(miao1<2){while(1)
+ 419   5                                              {l1=0; switch(i)
+ 420   6                                                             {case 0:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[
+             -1]=q[num1%1000/100];q2[2]=q[num1%100/10];q2[3]=q[num1%10];}else q2[3]=0x00;
+ 421   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<1000)num1=num1+1;btx2=1; DelayMs(1);}
+ 422   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>0)num1=num1-1;btx2=1; DelayMs(1); }break;  
+ 423   7                                                              case 1:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[
+             -1]=q[num1%1000/100];q2[2]=q[num1%100/10];q2[3]=q[num1%10];}else q2[2]=0x00;
+ 424   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<990)num1=num1+10;btx2=1; DelayMs(1);}
+ 425   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>10)num1=num1-10;btx2=1; DelayMs(1); }break;    
+ 426   7                                                              case 2:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[1]=q[num1%1000/100];q2[2]=q[
+             -num1%100/10];q2[3]=q[num1%10];}else q2[1]=0x00;
+ 427   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<900)num1=num1+100;btx2=1; DelayMs(1);}
+ 428   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>100)num1=num1-100;btx2=1; DelayMs(1); }break;    
+ 429   7                                                              case 3:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[1]=q[num1%1000/100];q2[2]=q[
+             -num1%100/10];q2[3]=q[num1%10];}else q2[0]=0x00;
+ 430   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<1)num1=num1+1000;btx2=1; DelayMs(1);}
+ 431   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>999)num1=num1-1000;btx2=1; DelayMs(1); }break;                                                                       
+             -                                         
+ 432   7                                                             }
+ 433   6      
+ 434   6                                              if(k1==0){DelayMs(1);miao1=0;i++;if(i>=4)i=0;while(k1==0);DelayMs(
+             -1);}
+ 435   6                                              if(miao1>6){miao1=0;break;}
+ 436   6                                              }}
+ 437   4      
+ 438   4                                                        write_eeprom();btx2=1;P2M0 = 0xff;l1=1;}  }
+ 439   2      ////////////////////////////////  ////////////////  ////////////////  ////////////////  ////////////////  /////
+             -///////////  //////////////// ////////////////  ////////////////  ////////////////  ////////////////  ////////////////              
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 9   
+
+             -                                 
+ 440   2      else {
+ 441   3      
+ 442   3      if(k1==0&&ks==1){l1=0;btx4=1;EX0=EX1=0;miao1=0;while(k1==0){l1=miao1%2;if(miao1>=5)
+ 443   5                                                    {i=0;x2=254;
+ 444   6                                                     if(ks==1)ks=0;else ks=1;
+ 445   6                                                     UartSendByte('A');UartSendByte('B');UartSendByte(ad2/1000+0
+             -x30);
+ 446   6                                                                        UartSendByte(ad2%1000/100+0x30);
+ 447   6                                                                        UartSendByte(ad2%100/10+0x30);
+ 448   6                                                                        UartSendByte(ad2%10+0x30);
+ 449   6                                                                        UartSendByte('E');
+ 450   6                                                                        UartSendByte(ad1/1000+0x30);
+ 451   6                                                                        UartSendByte(ad1%1000/100+0x30);
+ 452   6                                                                        UartSendByte(ad1%100/10+0x30);
+ 453   6                                                                        UartSendByte(ad1%10+0x30);
+ 454   6                                                                        UartSendByte('C');
+ 455   6                                                                        UartSendByte((4095-ad1)/1000+0x30);
+ 456   6                                                                        UartSendByte((4095-ad1)%1000/100+0x30);
+ 457   6                                                                        UartSendByte((4095-ad1)%100/10+0x30);
+ 458   6                                                                        UartSendByte((4095-ad1)%10+0x30);
+ 459   6                                                                        UartSendByte('V');
+ 460   6                                                                        UartSendByte((4095-ad2)/1000+0x30);
+ 461   6                                                                        UartSendByte((4095-ad2)%1000/100+0x30);
+ 462   6                                                                        UartSendByte((4095-ad2)%100/10+0x30);
+ 463   6                                                                        UartSendByte((4095-ad2)%10+0x30);
+ 464   6                                                                        UartSendByte('B');
+ 465   6                                                                        if(ks==1){UartSendByte('1');}else UartSendByte('0');
+ 466   6                                                                        if(ks==1){UartSendByte('0');}else UartSendByte('1');
+ 467   6                                                                        
+ 468   6                                                                        UartSendByte('#');
+ 469   6                                                                        
+ 470   6                                                                        DelayMs(10);
+ 471   6                                                                        UartSendByte('A');UartSendByte('B');UartSendByte(ad2/1000+0x30);
+ 472   6                                                                        UartSendByte(ad2%1000/100+0x30);
+ 473   6                                                                        UartSendByte(ad2%100/10+0x30);
+ 474   6                                                                        UartSendByte(ad2%10+0x30);
+ 475   6                                                                        UartSendByte('E');
+ 476   6                                                                        UartSendByte(ad1/1000+0x30);
+ 477   6                                                                        UartSendByte(ad1%1000/100+0x30);
+ 478   6                                                                        UartSendByte(ad1%100/10+0x30);
+ 479   6                                                                        UartSendByte(ad1%10+0x30);
+ 480   6                                                                        UartSendByte('C');
+ 481   6                                                                        UartSendByte((4095-ad1)/1000+0x30);
+ 482   6                                                                        UartSendByte((4095-ad1)%1000/100+0x30);
+ 483   6                                                                        UartSendByte((4095-ad1)%100/10+0x30);
+ 484   6                                                                        UartSendByte((4095-ad1)%10+0x30);
+ 485   6                                                                        UartSendByte('V');
+ 486   6                                                                        UartSendByte((4095-ad2)/1000+0x30);
+ 487   6                                                                        UartSendByte((4095-ad2)%1000/100+0x30);
+ 488   6                                                                        UartSendByte((4095-ad2)%100/10+0x30);
+ 489   6                                                                        UartSendByte((4095-ad2)%10+0x30);
+ 490   6                                                                        UartSendByte('B');
+ 491   6                                                                        if(ks==1){UartSendByte('1');}else UartSendByte('0');
+ 492   6                                                                        if(ks==1){UartSendByte('0');}else UartSendByte('1');
+ 493   6                                                                        
+ 494   6                                                                        UartSendByte('#');
+ 495   6                                                                        
+ 496   6                                                                        if(ks==1){ 
+ 497   7                                                                        if(num1>=1000){q2[0]=q[num1/1000];}else q2[0]=0x00;
+ 498   7                                                                        if(num1>=100){q2[1]=q[num1%1000/100];}else q2[1]=0x00;
+ 499   7                                                                        if(num1>=10){q2[2]=q[num1%100/10];}else q2[2]=0x00;
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 10  
+
+ 500   7                                                                        q2[3]=q[num1%10];}
+ 501   6      
+ 502   6                                                                        else 
+ 503   6                                                                        {
+ 504   7                                                                        q2[0]=0x00;
+ 505   7                                                                        q2[1]=q[0];
+ 506   7                                                                        q2[2]=q[15];
+ 507   7                                                                        q2[3]=q[15];
+ 508   7      
+ 509   7                                                                        } 
+ 510   6                                                          while(k1==0); DelayMs(10);                                                        
+             -        
+ 511   6                                                      }
+ 512   5                                                    }
+ 513   4                                                     
+ 514   4                                              if(miao1<2){while(1)
+ 515   5                                              {l1=0; switch(i)
+ 516   6                                                             {case 0:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[
+             -1]=q[num1%1000/100];q2[2]=q[num1%100/10];q2[3]=q[num1%10];}else q2[3]=0x00;
+ 517   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<1000)num1=num1+1;btx2=1; DelayMs(1);}
+ 518   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>0)num1=num1-1;btx2=1; DelayMs(1); }break;  
+ 519   7                                                              case 1:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[
+             -1]=q[num1%1000/100];q2[2]=q[num1%100/10];q2[3]=q[num1%10];}else q2[2]=0x00;
+ 520   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<990)num1=num1+10;btx2=1; DelayMs(1);}
+ 521   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>10)num1=num1-10;btx2=1; DelayMs(1); }break;    
+ 522   7                                                              case 2:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[1]=q[num1%1000/100];q2[2]=q[
+             -num1%100/10];q2[3]=q[num1%10];}else q2[1]=0x00;
+ 523   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<900)num1=num1+100;btx2=1; DelayMs(1);}
+ 524   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>100)num1=num1-100;btx2=1; DelayMs(1); }break;    
+ 525   7                                                              case 3:  x2=100;if(btx1==0){q2[0]=q[num1/1000];q2[1]=q[num1%1000/100];q2[2]=q[
+             -num1%100/10];q2[3]=q[num1%10];}else q2[0]=0x00;
+ 526   7                                                                       if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2)
+             -;if(num1<1)num1=num1+1000;btx2=1; DelayMs(1);}
+ 527   7                                                                       if(s2==0){miao1=0;while(s1==1&&miao1<2);m
+             -iao1=0;while(s1==0&&miao1<2);if(num1>999)num1=num1-1000;btx2=1; DelayMs(1); }break;                                                                       
+             -                                         
+ 528   7                                                             }
+ 529   6      
+ 530   6                                              if(k1==0){DelayMs(1);miao1=0;i++;if(i>=4)i=0;while(k1==0);DelayMs(
+             -1);}
+ 531   6                                              if(miao1>6){miao1=0;break;}
+ 532   6                                              }}
+ 533   4                                                   write_eeprom();btx2=1;P2M0 = 0xff;l1=1;} 
+ 534   3                                                   
+ 535   3              else  if(k1==0){l1=0;btx4=1;EX0=EX1=0;miao1=0;ks=1;btx2=1;while(k1==0);}                                 
+ 536   3      
+ 537   3           }                                             
+ 538   2                                                   
+ 539   2      if(miao1>3&&btx4==1){btx4=0;write_eeprom();}                                             
+ 540   2        }
+ 541   1       }
+ 542          void INT0_Isr() interrupt 0
+ 543          {EX0=0;EX1=0;btx2=1;
+ 544   1          if(s1==0){miao1=0;while(s2==1&&miao1<2);miao1=0;while(s2==0&&miao1<2);if(num1<1000)num1=num1+1; }     
+             -                      //????
+ 545   1       EX1=1;EX0=1;
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 11  
+
+ 546   1      }
+ 547          void INT1_Isr() interrupt 2
+ 548          {EX0=0;EX1=0;btx2=1;
+ 549   1            if(s2==0){miao1=0;while(s1==1&&miao1<2);miao1=0;while(s1==0&&miao1<2);if(num1>0)num1=num1-1;  } 
+ 550   1      EX0=1;EX1=1;
+ 551   1      }
+ 552          /* Timer0 interrupt routine */
+ 553          void tm0_isr() interrupt 1
+ 554          {x++;x1++;if(x1>x2){x1=0;btx1=~btx1;}miao++;if(miao>=500){miao=0;miao1++;}
+ 555   1       led1=led2=led3=led4=1;DataPort=0x00;
+ 556   1       if(x==1){led1=0;led2=1;led3=1;led4=1;DataPort=q2[0];}
+ 557   1       if(x==2){led1=1;led2=0;led3=1;led4=1;DataPort=q2[1];}
+ 558   1       if(x==3){led1=1;led2=1;led3=0;led4=1;DataPort=q2[2];}
+ 559   1       if(x==4){x=0;led1=1;led2=1;led3=1;led4=0;DataPort=q2[3];}
+ 560   1      }
+ 561          uchar xi=0;
+ 562          void UartIsr() interrupt 4
+ 563          {
+ 564   1      
+ 565   1          if (RI)
+ 566   1          {
+ 567   2              RI = 0;
+ 568   2      //      if(SBUF=='A'){xi=0;}
+ 569   2      //      q1[xi]=SBUF;
+ 570   2      //      xi++; 
+ 571   2      //      
+ 572   2      //      if(xi>=12){if(q1[0]=='A'&&q1[1]=='B'&&q1[11]=='#'){bt1=1;sw1=(q1[2]-0x30)*1000+(q1[3]-0x30)*100+(q1[4
+             -]-0x30)*10+(q1[5]-0x30)*1;sw2=(q1[7]-0x30)*1000+(q1[8]-0x30)*100+(q1[9]-0x30)*10+(q1[10]-0x30)*1;}
+ 573   2      //                 if(q1[0]=='A'&&q1[1]=='C'&&q1[11]=='#'){bt1=1;sw3=(q1[2]-0x30)*1000+(q1[3]-0x30)*100+(q
+             -1[4]-0x30)*10+(q1[5]-0x30)*1;bt2=q1[10]-0x30;}
+ 574   2      //                }
+ 575   2          }
+ 576   1      }
+ 577          //A1000#
+ 578          void Uart2Isr() interrupt 8
+ 579          {
+ 580   1          if (S2CON & 0x02)
+ 581   1          {
+ 582   2              S2CON &= ~0x02;
+ 583   2              busy = 0;
+ 584   2          }
+ 585   1          if (S2CON & 0x01)
+ 586   1          {
+ 587   2              S2CON &= ~0x01;
+ 588   2            if(SBUF=='A'){xi=0;}
+ 589   2            q1[xi]=SBUF;
+ 590   2            xi++; 
+ 591   2            
+ 592   2            if(xi>=6){if(q1[0]=='A'&&q1[5]=='#'){bt1=1;btx2=1;num1=(q1[1]-0x30)*1000+(q1[2]-0x30)*100+(q1[3]-0x30)*
+             -10+(q1[4]-0x30)*1;if(num1>1000){num1=1000;}}
+ 593   3                      
+ 594   3                      }
+ 595   2              
+ 596   2          }
+ 597   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   7656    ----
+   CONSTANT SIZE    =     20    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+C51 COMPILER V9.52.0.0   1                                                                 04/12/2023 12:48:11 PAGE 12  
+
+   DATA SIZE        =     76       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
